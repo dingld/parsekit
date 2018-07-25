@@ -79,25 +79,25 @@ class Extractor:
 
     @property
     def context(self):
-        if not hasattr(self, '__context'):
-            self.__context = {
+        if not hasattr(self, '_context'):
+            self._context = {
                 '$url': self.response.url,
                 '$time': time.time(),
                 '$datetime': datetime.datetime.now(),
             }
-        return self.__context
+        return self._context
     
     @property
     def items(self):
-        if not hasattr(self, '__items'):
-            self.__items = []
-        return self.__items
+        if not hasattr(self, '_items'):
+            self._items = []
+        return self._items
     
     @property
     def links(self):
-        if not hasattr(self, '__links'):
-            self.__links = []
-        return self.__links
+        if not hasattr(self, '_links'):
+            self._links = []
+        return self._links
 
     def execute(self):
         self._execute()
@@ -130,11 +130,8 @@ class Extractor:
             yield l.load_item()
 
     def __filter(self, output, conds, debug=False):
-        return filter(lambda item: filter_outout(item, conds, debug), 
-                    filter(lambda x: x, 
-                            map(dict, arg_to_iter(output))
-                            )
-                    )
+        filter_ = lambda item: item and filter_outout(item, conds, debug)
+        return list(map(dict, filter(filter_, output)))
 
     def _extract(self, response, option):
         """
@@ -146,8 +143,7 @@ class Extractor:
         if not ref:
             extracts = self.__extract(response, option)
             _ITEM_REFS[response] = list(arg_to_iter(extracts))
-        output = _ITEM_REFS[response]
-        return self.__filter(output, conds)
+        return self.__filter(_ITEM_REFS[response], conds)
     
     def _execute(self):
         """
@@ -155,15 +151,20 @@ class Extractor:
         """
         if not self.items:
             for option in self.template.items:
-                self.items.extend(self._extract(self.response, option))
+                output = self._extract(self.response, option)
+                self.items.extend(output)
+                if self.items:
+                    break
 
         if not self.links:
             for option in self.template.links:
                 suffix = option.get('suffix')
                 callback = option['callback']
+                priority = option.get('priority', 0)
                 for link in self._extract(self.response, option):
                     link = dict(**link)
                     link.setdefault('callback', callback)
+                    link.setdefault('priority', priority)
                     suffix = link.pop('suffix', '') or suffix
                     if suffix:
                         link['url'] = urljoin(link['url'], suffix)
